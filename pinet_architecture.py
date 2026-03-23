@@ -1,6 +1,34 @@
 wheimport torch
 import torch.nn as nn
 import torch.nn.functional as F
+import os
+from torch.utils.data import Dataset, DataLoader
+from torchvision import transforms
+from PIL import Image
+
+class Ki67Dataset(Dataset):
+    """
+    Custom Dataset for loading the Ki67 images from the allData folder.
+    """
+    def __init__(self, data_dir, transform=None):
+        self.data_dir = data_dir
+        self.image_files = [f for f in os.listdir(data_dir) if f.endswith('.png')]
+        self.transform = transform
+
+    def __len__(self):
+        return len(self.image_files)
+
+    def __getitem__(self, idx):
+        img_name = os.path.join(self.data_dir, self.image_files[idx])
+        image = Image.open(img_name).convert('RGB')
+        
+        if self.transform:
+            image = self.transform(image)
+            
+        # Assuming you will load labels/masks here. For now, returning dummy targets
+        dummy_target = torch.zeros((1, 256, 256))
+        
+        return image, dummy_target
 
 class ResBlock(nn.Module):
     """
@@ -119,13 +147,28 @@ class piNET(nn.Module):
         return torch.sigmoid(out)
 
 if __name__ == "__main__":
-    # Test the piNET architecture
+    import torchvision.transforms as transforms
+    
+    # Setup data transformation to resize images to 256x256 and convert to tensor
+    transform = transforms.Compose([
+        transforms.Resize((256, 256)),
+        transforms.ToTensor(),
+    ])
+    
+    # Initialize the Dataset and DataLoader
+    data_path = "./allData"
+    dataset = Ki67Dataset(data_dir=data_path, transform=transform)
+    dataloader = DataLoader(dataset, batch_size=4, shuffle=True)
+    
+    print(f"Loaded {len(dataset)} images from {data_path}")
+    
+    # Test the piNET architecture with actual data
     model = piNET(in_channels=3, out_classes=1)
     
-    # As mentioned in the paper, piNET is designed to accept 256x256 images
-    dummy_input = torch.randn(1, 3, 256, 256) # (batch_size, channels, width, height)
+    # Fetch a batch from the dataloader
+    images, targets = next(iter(dataloader))
     
-    output = model(dummy_input)
-    print(f"Input Shape: {dummy_input.shape}")
-    print(f"Output Shape: {output.shape}")
-    print("piNET architecture forward pass successful!")
+    output = model(images)
+    print(f"Real Batch Input Shape: {images.shape}")
+    print(f"Model Output Shape: {output.shape}")
+    print("piNET architecture forward pass with loaded data successful!")
